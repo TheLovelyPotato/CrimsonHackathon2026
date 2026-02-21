@@ -1,0 +1,27 @@
+# Git Commands Guide
+
+## Basic Git Setup
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+## Common Commands
+```bash
+git init                          # Initialize a new repository
+git add .                         # Stage all changes
+git commit -m "message"           # Commit changes
+git push origin main              # Push to remote
+git pull origin main              # Pull from remote
+git branch                        # List branches
+git checkout -b branch-name       # Create and switch to new branch
+git status                        # Check repository status
+git log                           # View commit history
+```
+
+## Undoing Changes
+```bash
+git restore filename              # Discard changes in working directory
+git reset HEAD filename           # Unstage a file
+git revert commit-hash            # Create new commit that undoes changes
+```
