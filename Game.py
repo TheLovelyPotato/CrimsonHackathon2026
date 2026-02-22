@@ -2,6 +2,8 @@ import cv2
 import time
 import mediapipe as mp
 import pygame
+import random
+import sys
 
 # MediaPipe Tasks imports
 from mediapipe.tasks import python
@@ -50,7 +52,6 @@ OBS_BIRD = "BIRD"
 def draw_ground():
     pygame.draw.line(screen, BLACK, (0, GROUND_Y), (WIDTH, GROUND_Y), 2)
 
-
 def draw_dino(rect, state):
     """
     Draw a simple pixel-ish dinosaur inside rect.
@@ -81,7 +82,6 @@ def draw_dino(rect, state):
         pygame.draw.rect(screen, BLACK, (x + 14, y + h - 12, 10, 12))
         pygame.draw.rect(screen, BLACK, (x + 30, y + h - 12, 10, 12))
 
-
 def spawn_obstacle():
     kind = random.choices([OBS_CACTUS, OBS_BIRD], weights=[0.65, 0.35])[0]
 
@@ -96,7 +96,6 @@ def spawn_obstacle():
         rect = pygame.Rect(WIDTH + 10, bird_y, w, h)
         return {"kind": OBS_BIRD, "rect": rect}
 
-
 def draw_obstacle(obs):
     r = obs["rect"]
     if obs["kind"] == OBS_CACTUS:
@@ -107,14 +106,12 @@ def draw_obstacle(obs):
         pygame.draw.rect(screen, BLACK, (r.x + 6, r.y, 10, 10), border_radius=2)
         pygame.draw.rect(screen, BLACK, (r.x + 18, r.y, 10, 10), border_radius=2)
 
-
 def show_text_center(lines):
     y = HEIGHT // 2 - 30
     for i, line in enumerate(lines):
         surf = big_font.render(line, True, BLACK)
         rect = surf.get_rect(center=(WIDTH // 2, y + i * 40))
         screen.blit(surf, rect)
-
 
 def reset_game():
     dino_state = STATE_RUN
@@ -133,14 +130,12 @@ def reset_game():
 
     return dino, dino_state, dino_vel_y, on_ground, obstacles, spawn_timer, spawn_delay, speed, score, game_over
 
-
 dino, dino_state, dino_vel_y, on_ground, obstacles, spawn_timer, spawn_delay, speed, score, game_over = reset_game()
 
 # Load face landmark model
 base_options = python.BaseOptions(
     model_asset_path="face_landmarker.task"  # face_landmarker.task is in the same directory, literally an image used to build
 ) # Model from: https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker#models
-
 
 # Update the options for the face landmarker, use base options, don't bother with blend and transformations
 options = vision.FaceLandmarkerOptions(
@@ -224,6 +219,8 @@ if result.face_landmarks: # Grab all of the face_landmarks, get their non-normal
         for landmark in face_landmarks:
             total_yBase += int(landmark.y * 600)
 
+baseline_y = int(total_yBase / len(face_landmarks)) # Get the average y value for base line, based off number of face_landmarks
+
 if total_yBase == 0: # Safety check if human not in frame
     print("No face detected. Please try again.")
     capture.release()
@@ -233,6 +230,7 @@ if total_yBase == 0: # Safety check if human not in frame
 # Game loop chunk
 
 start_time = time.time()
+want_duck = False
 
 while True:
 
@@ -270,14 +268,14 @@ while True:
     clock.tick(FPS)
 
     want_jump = False
-    want_duck = False
-
+    
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-
-
+        if event.type == pygame.KEYDOWN:
+            if game_over and event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_UP):
+                dino, dino_state, dino_vel_y, on_ground, obstacles, spawn_timer, spawn_delay, speed, score, game_over = reset_game()
 
 
     if ratio < 0.85 and (update_time - start_time) > 0.5: # Offset of 0.15 
@@ -290,6 +288,8 @@ while True:
         want_duck = True
         print("Crouch")
         start_time = time.time()
+    elif (update_time - start_time) > 0.5:
+        want_duck = False
 
     # Update
     if not game_over:
@@ -301,7 +301,7 @@ while True:
                 on_ground = False
             elif want_duck:
                 dino_state = STATE_DUCK
-            else:
+            elif not want_duck:
                 dino_state = STATE_RUN
         else:
             dino_state = STATE_JUMP
@@ -380,6 +380,8 @@ while True:
                 x = int(landmark.x * frame.shape[1])
                 y = int(landmark.y * frame.shape[0])
                 cv2.circle(frame, (x, y), 1, (255, 0, 255), -1)
+    
+    cv2.line(frame, (200, baseline_y), (600, baseline_y), (0, 255, 0), 2) # Draw a horizontal line at the y base value
 
     cv2.imshow("Mediapipe Feed", frame)
 
