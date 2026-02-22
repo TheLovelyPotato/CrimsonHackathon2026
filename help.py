@@ -1,7 +1,6 @@
 import cv2
 import time
 import mediapipe as mp
-import numpy as np
 
 # MediaPipe Tasks imports
 from mediapipe.tasks import python
@@ -63,14 +62,14 @@ while (current_time - last_time) < 10: # Time is needed for person to adjust
     if result.face_landmarks:
         for face_landmarks in result.face_landmarks:
             for landmark in face_landmarks:
-                x = int(landmark.x * frame.shape[1])
+                x = int(landmark.x * frame.shape[1]) # Get the normalized x and y values for each landmark
                 y = int(landmark.y * frame.shape[0])
-                cv2.circle(frame, (x, y), 1, (255, 0, 255), -1)
+                cv2.circle(frame, (x, y), 1, (255, 255, 0), -1) # Draw a circle at each landmark
 
     cv2.imshow("Mediapipe Feed", frame) #Outut camera feed
 
-    if cv2.waitKey(1) & 0xFF == ord('q'): # Break early if 'q' is pressed
-        break
+    if cv2.waitKey(1) & 0xFF == ord('q'): # Break early if 'q' is pressed, mask out last 8 bits for ASCII input
+        break                             # waitKey for 1 millisecond
 
 
 ret, frame = capture.read() # Then actually read the camera for the capture image
