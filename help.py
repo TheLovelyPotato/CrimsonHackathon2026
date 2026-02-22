@@ -1,3 +1,5 @@
+#pip install numpy opencv-python, dependencies for mediapipe
+#pip install mediapipe
 import cv2
 import time
 import mediapipe as mp
