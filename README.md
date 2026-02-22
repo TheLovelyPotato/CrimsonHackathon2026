@@ -8,10 +8,10 @@ A fun Python-based game featuring duckies! Dodge obstacles in an interactive env
 2. Navigate to the project folder:
 3. Install dependencies:
    run vitualenv_setup.bat
-4.change line 12 in Game.py
-  capture = cv2.VideoCapture(0)
-  0 for webcam
-  1 for usb camera
+4. change line 12 in Game.py
+   capture = cv2.VideoCapture(0)
+   0 for webcam
+   1 for usb camera
 
 ## How to Play
 Run the game:
