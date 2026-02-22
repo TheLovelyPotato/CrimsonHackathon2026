@@ -2,6 +2,7 @@ import cv2
 import time
 import mediapipe as mp
 import pygame
+import random
 
 # MediaPipe Tasks imports
 from mediapipe.tasks import python
@@ -224,6 +225,8 @@ if result.face_landmarks: # Grab all of the face_landmarks, get their non-normal
         for landmark in face_landmarks:
             total_yBase += int(landmark.y * 600)
 
+baseline_y = int(total_yBase / len(face_landmarks)) # Get the average y value for base line, based off number of face_landmarks
+
 if total_yBase == 0: # Safety check if human not in frame
     print("No face detected. Please try again.")
     capture.release()
@@ -233,6 +236,7 @@ if total_yBase == 0: # Safety check if human not in frame
 # Game loop chunk
 
 start_time = time.time()
+want_duck = False
 
 while True:
 
@@ -270,14 +274,15 @@ while True:
     clock.tick(FPS)
 
     want_jump = False
-    want_duck = False
+    
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
-
-
+        if event.type == pygame.KEYDOWN:
+            if game_over and event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_UP):
+                dino, dino_state, dino_vel_y, on_ground, obstacles, spawn_timer, spawn_delay, speed, score, game_over = reset_game()
 
 
     if ratio < 0.85 and (update_time - start_time) > 0.5: # Offset of 0.15 
@@ -290,6 +295,8 @@ while True:
         want_duck = True
         print("Crouch")
         start_time = time.time()
+    elif (update_time - start_time) > 0.5:
+        want_duck = False
 
     # Update
     if not game_over:
@@ -301,7 +308,7 @@ while True:
                 on_ground = False
             elif want_duck:
                 dino_state = STATE_DUCK
-            else:
+            elif not want_duck:
                 dino_state = STATE_RUN
         else:
             dino_state = STATE_JUMP
@@ -380,6 +387,8 @@ while True:
                 x = int(landmark.x * frame.shape[1])
                 y = int(landmark.y * frame.shape[0])
                 cv2.circle(frame, (x, y), 1, (255, 0, 255), -1)
+    
+    cv2.line(frame, (200, baseline_y), (600, baseline_y), (0, 255, 0), 2) # Draw a horizontal line at the y base value
 
     cv2.imshow("Mediapipe Feed", frame)
 

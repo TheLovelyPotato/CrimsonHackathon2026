@@ -94,6 +94,8 @@ if result.face_landmarks: # Grab all of the face_landmarks, get their non-normal
         for landmark in face_landmarks:
             total_yBase += int(landmark.y * 600)
 
+baseline_y = int(total_yBase / len(face_landmarks)) # Get the average y value for base line, based off number of face_landmarks
+
 if total_yBase == 0: # Safety check if human not in frame
     print("No face detected. Please try again.")
     capture.release()
@@ -153,6 +155,8 @@ while True:
                 y = int(landmark.y * frame.shape[0])
                 cv2.circle(frame, (x, y), 1, (255, 0, 255), -1)
 
+    cv2.line(frame, (200, baseline_y), (600, baseline_y), (0, 255, 0), 2) # Draw a horizontal line at the y base value
+    
     cv2.imshow("Mediapipe Feed", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'): # Input signal needed for if the player dies to break the loop
