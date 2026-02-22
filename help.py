@@ -94,6 +94,8 @@ if result.face_landmarks: # Grab all of the face_landmarks, get their non-normal
         for landmark in face_landmarks:
             total_yBase += int(landmark.y * 600)
 
+baseline_y = int(total_yBase / len(face_landmarks)) # Get the average y value for base line, based off number of face_landmarks
+
 if total_yBase == 0: # Safety check if human not in frame
     print("No face detected. Please try again.")
     capture.release()
@@ -135,11 +137,11 @@ while True:
     # Signal timing threshold of 0.5 seconds, creates a 0.5 second delay for game input
     # ^ People's avg jump time is apparently 0.5 - 0.9 seconds
 
-    if ratio < 0.85 and (update_time - start_time) > 0.5: # Offset of 0.15 
+    if ratio < 0.78 and (update_time - start_time) > 0.5: # Offset of 0.2 
         # Jump signal
         print("Jump")
         start_time = time.time()
-    elif ratio > 1.15 and (update_time - start_time) > 0.5:
+    elif ratio > 1.22 and (update_time - start_time) > 0.5:
         #Crouch signal
         print("Crouch")
         start_time = time.time()
@@ -152,6 +154,8 @@ while True:
                 x = int(landmark.x * frame.shape[1])
                 y = int(landmark.y * frame.shape[0])
                 cv2.circle(frame, (x, y), 1, (255, 0, 255), -1)
+    
+    cv2.line(frame, (200, baseline_y), (600, baseline_y), (0, 255, 0), 2) # Draw a horizontal line at the y base value
 
     cv2.imshow("Mediapipe Feed", frame)
 
