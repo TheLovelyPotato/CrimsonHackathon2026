@@ -34,6 +34,16 @@ RED = (255, 0, 0)
 
 pygame.init() # Need to init
 
+pygame.mixer.init() # Initialize the mixer, and all of the sound variables
+pygame.mixer.music.load("Menu song.mp3") # Load music file
+pygame.mixer.music.set_volume(1) # Volume 100%
+pygame.mixer.music.play(-1) # Loop Forever
+
+# Sound Variables
+
+game_death = pygame.mixer.Sound("Shoebill Stork Sound.wav")
+jump_sound = pygame.mixer.Sound("Quack.wav")
+
 # Block cycle for the menu
 
 start_button_xLeft = 50
@@ -241,6 +251,11 @@ current_time = last_time
 
 print("Normalizing human in 10 seconds!")
 
+pygame.mixer.stop() #Stop the menu music
+pygame.mixer.music.load("Proper Duckie Song.mp3") # Load music file for bird song
+pygame.mixer.music.set_volume(1) # Volume 100%
+pygame.mixer.music.play(-1) # Loop Forever
+
 while (current_time - last_time) < 10: # Time is needed for person to adjust 
 
     current_time = time.time() # Update time
@@ -365,6 +380,7 @@ while True:
         # Jump signal
         want_jump = True
         print("Jump")
+        jump_sound.play()
         start_time = time.time()
     elif ratio > 1.15 and (update_time - start_time) > 0.5:
         #Crouch signal
@@ -376,6 +392,7 @@ while True:
 
     # Update
     if not game_over:
+        pygame.mixer.music.unpause()
         # State transitions
         if on_ground:
             if want_jump:
@@ -451,6 +468,8 @@ while True:
     draw_dino(dino, dino_state)
 
     if game_over:
+        pygame.mixer.music.pause()
+        game_death.play()
         show_text_center(["GAME OVER", "Press SPACE to restart"])
 
     pygame.display.flip()
