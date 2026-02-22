@@ -10,7 +10,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # Open camera, change index based on cam num and position
-capture = cv2.VideoCapture(1)
+capture = cv2.VideoCapture(0)
 
 #game init 
 WIDTH, HEIGHT = 900, 250
@@ -146,30 +146,30 @@ def draw_dino(rect, state):
     Draw a simple pixel-ish dinosaur inside rect.
     rect is the collision box (what matters for gameplay).
     """
-    x, y, w, h = rect
+    DINO_SCALE = 0.85
 
-    # Body block
-    pygame.draw.rect(screen, BLACK, (x + 8, y + 10, w - 16, h - 18), border_radius=2)
+run_raw  = pygame.image.load(RUN_PATH).convert_alpha()
+duck_raw = pygame.image.load(DUCK_PATH).convert_alpha()
 
-    # Head (front)
-    pygame.draw.rect(screen, BLACK, (x + w - 18, y + 6, 18, 18), border_radius=2)
+run_img  = scale_img(run_raw,  DINO_SCALE)
+duck_img = scale_img(duck_raw, DINO_SCALE)
 
-    # Snout
-    pygame.draw.rect(screen, BLACK, (x + w - 6, y + 12, 10, 8), border_radius=2)
+RUN_W, RUN_H = run_img.get_width(), run_img.get_height()
+DUCK_W, DUCK_H = duck_img.get_width(), duck_img.get_height()
 
-    # Eye (tiny white pixel)
-    pygame.draw.rect(screen, WHITE, (x + w - 14, y + 10, 3, 3))
+# Feet offsets (fixes floating)
+RUN_FEET_OFFSET  = compute_feet_offset(run_img)
+DUCK_FEET_OFFSET = compute_feet_offset(duck_img)
 
-    # Tail
-    pygame.draw.rect(screen, BLACK, (x, y + 18, 10, 10), border_radius=2)
+# Player hitbox padding
+RUN_PAD_X = 10
+RUN_PAD_TOP = 6
+RUN_PAD_BOTTOM = 6
 
-    # Legs (change a bit for duck)
-    if state == STATE_DUCK:
-        pygame.draw.rect(screen, BLACK, (x + 16, y + h - 8, 10, 8))
-        pygame.draw.rect(screen, BLACK, (x + 34, y + h - 8, 10, 8))
-    else:
-        pygame.draw.rect(screen, BLACK, (x + 14, y + h - 12, 10, 12))
-        pygame.draw.rect(screen, BLACK, (x + 30, y + h - 12, 10, 12))
+DUCK_PAD_X = 12
+DUCK_PAD_TOP = 6
+DUCK_PAD_BOTTOM = 4
+
 
 def spawn_obstacle():
     kind = random.choices([OBS_CACTUS, OBS_BIRD], weights=[0.65, 0.35])[0]

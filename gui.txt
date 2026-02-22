@@ -1,0 +1,424 @@
+<?xml version="1.0" encoding="utf-16"?><encore ver="1.0"><guid>d8f7246a-280d-4cfc-8dc5-fca7f5929f00</guiimport os
+import sys
+import random
+import pygame
+
+# ----------------------------
+# Settings
+# ----------------------------
+WIDTH, HEIGHT = 900, 250
+FPS = 60
+GROUND_Y = 200
+DINO_X = 80
+
+GRAVITY = 0.9
+JUMP_VEL = -14
+START_SPEED = 7.0
+
+WHITE = (255, 255, 255)
+BLACK = (20, 20, 20)
+GROUND_COLOR = (80, 80, 80)
+
+STATE_RUN = "RUN"
+STATE_JUMP = "JUMP"
+STATE_DUCK = "DUCK"
+
+OBS_PAPER = "PAPER"
+OBS_BIRD_HIGH = "BIRD_HIGH"   # jump over
+OBS_BIRD_LOW = "BIRD_LOW"     # duck under
+
+# ----------------------------
+# Init pygame + display FIRST
+# ----------------------------
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Dino Clone")
+clock = pygame.time.Clock()
+
+font = pygame.font.SysFont("consolas", 20)
+big_font = pygame.font.SysFont("consolas", 34)
+
+# ----------------------------
+# Assets (assets folder, case-insensitive)
+# ----------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+
+def find_asset(name_or_stem: str) -> str:
+    """
+    Find an image in ./assets case-insensitively.
+    Accepts: "Big bird" or "Big bird.png"
+    Supports: .png .jpg .jpeg .webp
+    """
+    if not os.path.isdir(ASSETS_DIR):
+        raise FileNotFoundError(f"assets folder not found at: {ASSETS_DIR}")
+
+    want_stem, want_ext = os.path.splitext(name_or_stem)
+    want_stem = want_stem.lower()
+    want_ext = want_ext.lower()
+
+    exts_ok = (".png", ".jpg", ".jpeg", ".webp")
+
+    for f in os.listdir(ASSETS_DIR):
+        stem, ext = os.path.splitext(f)
+        if stem.lower() != want_stem:
+            continue
+        if want_ext:
+            if ext.lower() == want_ext:
+                return os.path.join(ASSETS_DIR, f)
+        else:
+            if ext.lower() in exts_ok:
+                return os.path.join(ASSETS_DIR, f)
+
+    raise FileNotFoundError(
+        f"Could not find '{name_or_stem}' in {ASSETS_DIR}. Files: {os.listdir(ASSETS_DIR)}"
+    )
+
+# Player sprites (required)
+RUN_PATH  = find_asset("Big bird")
+DUCK_PATH = find_asset("shoved down bird")
+
+# Low-flying obstacle sprite (optional/recommended)
+LOW_OBS_PATH = None
+try:
+    LOW_OBS_PATH = find_asset("flyingwhitebird")
+except FileNotFoundError:
+    LOW_OBS_PATH = None
+
+def scale_img(img, scale):
+    w = max(1, int(img.get_width() * scale))
+    h = max(1, int(img.get_height() * scale))
+    return pygame.transform.smoothscale(img, (w, h))
+
+# ----------------------------
+# Sprite "feet" calibration (fix floating)
+# ----------------------------
+def sprite_bottom_ink_y(img: pygame.Surface) -> int:
+    """
+    Returns y of lowest non-transparent pixel in sprite.
+    """
+    w, h = img.get_width(), img.get_height()
+    img.lock()
+    try:
+        for y in range(h - 1, -1, -1):
+            for x in range(w):
+                if img.get_at((x, y)).a > 0:
+                    return y
+    finally:
+        img.unlock()
+    return h - 1
+
+def compute_feet_offset(img: pygame.Surface) -> int:
+    """
+    Pixels that exist BELOW the feet ink.
+    We'll pin feet to ground by subtracting (H - feet_offset) instead of H.
+    """
+    h = img.get_height()
+    ink_y = sprite_bottom_ink_y(img)
+    return (h - 1) - ink_y
+
+# ----------------------------
+# Load & scale player sprites
+# ----------------------------
+DINO_SCALE = 0.85
+
+run_raw  = pygame.image.load(RUN_PATH).convert_alpha()
+duck_raw = pygame.image.load(DUCK_PATH).convert_alpha()
+
+run_img  = scale_img(run_raw,  DINO_SCALE)
+duck_img = scale_img(duck_raw, DINO_SCALE)
+
+RUN_W, RUN_H = run_img.get_width(), run_img.get_height()
+DUCK_W, DUCK_H = duck_img.get_width(), duck_img.get_height()
+
+# Feet offsets (fixes floating)
+RUN_FEET_OFFSET  = compute_feet_offset(run_img)
+DUCK_FEET_OFFSET = compute_feet_offset(duck_img)
+
+# Player hitbox padding
+RUN_PAD_X = 10
+RUN_PAD_TOP = 6
+RUN_PAD_BOTTOM = 6
+
+DUCK_PAD_X = 12
+DUCK_PAD_TOP = 6
+DUCK_PAD_BOTTOM = 4
+
+def get_player_sprite_and_hitbox(x, y_top, state, on_ground):
+    using_duck = (state == STATE_DUCK and on_ground)
+
+    if using_duck:
+        img = duck_img
+        w, h = DUCK_W, DUCK_H
+        pad_x, pad_top, pad_bottom = DUCK_PAD_X, DUCK_PAD_TOP, DUCK_PAD_BOTTOM
+    else:
+        img = run_img
+        w, h = RUN_W, RUN_H
+        pad_x, pad_top, pad_bottom = RUN_PAD_X, RUN_PAD_TOP, RUN_PAD_BOTTOM
+
+    sprite_rect = pygame.Rect(x, int(y_top), w, h)
+
+    hit_w = max(1, w - 2 * pad_x)
+    hit_h = max(1, h - pad_top - pad_bottom)
+    hitbox = pygame.Rect(
+        sprite_rect.x + pad_x,
+        sprite_rect.y + pad_top,
+        hit_w,
+        hit_h
+    )
+    return img, sprite_rect, hitbox
+
+# ----------------------------
+# Draw helpers
+# ----------------------------
+def draw_ground():
+    pygame.draw.line(screen, GROUND_COLOR, (0, GROUND_Y), (WIDTH, GROUND_Y), 2)
+
+def show_text_center(lines):
+    y = HEIGHT // 2 - 30
+    for i, line in enumerate(lines):
+        surf = big_font.render(line, True, BLACK)
+        rect = surf.get_rect(center=(WIDTH // 2, y + i * 40))
+        screen.blit(surf, rect)
+
+def draw_paper(surface, rect):
+    x, y, w, h = rect
+    pygame.draw.rect(surface, BLACK, rect, border_radius=2)
+
+    inset = 3
+    inner = pygame.Rect(x + inset, y + inset, w - 2 * inset, h - 2 * inset)
+    if inner.w > 2 and inner.h > 2:
+        pygame.draw.rect(surface, WHITE, inner, border_radius=1)
+
+    line_y = y + 8
+    while line_y < y + h - 6:
+        pygame.draw.line(surface, BLACK, (x + 6, line_y), (x + w - 6, line_y), 1)
+        line_y += 7
+
+# ----------------------------
+# Obstacle birds
+# ----------------------------
+OB_SCALE = 0.85
+
+# High bird: simple drawn block (jump over)
+HIGH_BIRD_W = max(1, int(34 * OB_SCALE))
+HIGH_BIRD_H = max(1, int(22 * OB_SCALE))
+
+def draw_high_bird(surface, rect):
+    r = rect
+    pygame.draw.rect(surface, BLACK, (r.x, r.y + 6, r.w, r.h - 6), border_radius=2)
+    pygame.draw.rect(surface, BLACK, (r.x + 5, r.y, 8, 8), border_radius=2)
+    pygame.draw.rect(surface, BLACK, (r.x + 14, r.y, 8, 8), border_radius=2)
+
+# Low bird: uses flyingwhitebird sprite if present; otherwise a block
+low_bird_img = None
+LOW_BIRD_W, LOW_BIRD_H = max(1, int(60 * OB_SCALE)), max(1, int(20 * OB_SCALE))
+if LOW_OBS_PATH:
+    low_raw = pygame.image.load(LOW_OBS_PATH).convert_alpha()
+    low_bird_img = scale_img(low_raw, OB_SCALE)
+    LOW_BIRD_W, LOW_BIRD_H = low_bird_img.get_width(), low_bird_img.get_height()
+
+def draw_low_bird(surface, rect):
+    if low_bird_img:
+        surface.blit(low_bird_img, rect)
+    else:
+        pygame.draw.rect(surface, BLACK, rect, border_radius=2)
+
+def shrink_hitbox(rect, pad_x, pad_y):
+    return pygame.Rect(
+        rect.x + pad_x,
+        rect.y + pad_y,
+        max(1, rect.w - 2 * pad_x),
+        max(1, rect.h - 2 * pad_y),
+    )
+
+# ----------------------------
+# Spawning (adds duck-under birds back + fixes indentation bug)
+# ----------------------------
+def spawn_obstacle(speed):
+    # old-good gap logic
+    base_min = 280
+    base_max = 570
+    shrink = int((speed - START_SPEED) * 8)
+
+    gap_min = max(240, base_min - shrink)
+    gap_max = max(gap_min + 140, base_max - shrink)
+    next_gap_px = random.randint(gap_min, gap_max)
+
+    # Mix: paper + high birds + low birds
+    kind = random.choices(
+        [OBS_PAPER, OBS_BIRD_HIGH, OBS_BIRD_LOW],
+        weights=[0.45, 0.15, 0.40]   # more duck birds so you actually see them
+    )[0]
+
+    if kind == OBS_PAPER:
+        shape = random.choice(["tall", "square", "wide"])
+        if shape == "tall":
+            w = random.choice([22, 26, 30])
+            h = random.choice([44, 54, 64])
+        elif shape == "square":
+            w = random.choice([34, 40, 46])
+            h = random.choice([34, 40, 46])
+        else:
+            w = random.choice([50, 60, 72])
+            h = random.choice([28, 34, 40])
+
+        rect = pygame.Rect(WIDTH + 10, GROUND_Y - h, w, h)
+        return {"kind": OBS_PAPER, "rect": rect}, next_gap_px
+
+    if kind == OBS_BIRD_HIGH:
+        # High bird: jump over (near ground)
+        y_top = GROUND_Y - HIGH_BIRD_H - 58
+        rect = pygame.Rect(WIDTH + 10, y_top, HIGH_BIRD_W, HIGH_BIRD_H)
+        hit = shrink_hitbox(rect, 6, 4)
+        return {"kind": OBS_BIRD_HIGH, "rect": rect, "hit": hit}, next_gap_px
+
+    # Low bird: MUST DUCK UNDER
+    # Put its bottom at a consistent height that hits RUN but clears DUCK.
+    LOW_BOTTOM_OFFSET = 58  # smaller => higher/harder, larger => lower/easier
+    low_bottom = GROUND_Y - LOW_BOTTOM_OFFSET
+
+    rect = pygame.Rect(WIDTH + 10, low_bottom - LOW_BIRD_H, LOW_BIRD_W, LOW_BIRD_H)
+    hit = shrink_hitbox(rect, 10, 6)  # tighter hitbox so it's fair
+    return {"kind": OBS_BIRD_LOW, "rect": rect, "hit": hit}, next_gap_px
+
+# ----------------------------
+# Reset
+# ----------------------------
+def reset_game():
+    dino_state = STATE_RUN
+    dino_vel_y = 0.0
+    on_ground = True
+
+    # Pin FEET to ground, not sprite bottom
+    dino_y = float(GROUND_Y - (RUN_H - RUN_FEET_OFFSET))
+
+    obstacles = []
+    speed = START_SPEED
+    score = 0
+    game_over = False
+
+    dist_until_spawn = random.randint(260, 520)
+    return dino_y, dino_state, dino_vel_y, on_ground, obstacles, speed, score, game_over, dist_until_spawn
+
+dino_y, dino_state, dino_vel_y, on_ground, obstacles, speed, score, game_over, dist_until_spawn = reset_game()
+
+# ----------------------------
+# Main loop
+# ----------------------------
+while True:
+    clock.tick(FPS)
+
+    want_jump = False
+    want_duck = False
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.KEYDOWN:
+            if game_over and event.key in (pygame.K_SPACE, pygame.K_RETURN, pygame.K_UP):
+                dino_y, dino_state, dino_vel_y, on_ground, obstacles, speed, score, game_over, dist_until_spawn = reset_game()
+
+            if (not game_over) and event.key in (pygame.K_SPACE, pygame.K_UP):
+                want_jump = True
+
+    keys = pygame.key.get_pressed()
+    if (not game_over) and keys[pygame.K_DOWN]:
+        want_duck = True
+
+    # -----------------------------
+    # Update
+    # -----------------------------
+    if not game_over:
+        # State transitions
+        if on_ground:
+            if want_jump:
+                dino_state = STATE_JUMP
+                dino_vel_y = JUMP_VEL
+                on_ground = False
+            elif want_duck:
+                dino_state = STATE_DUCK
+            else:
+                dino_state = STATE_RUN
+        else:
+            dino_state = STATE_JUMP
+
+        # Feet-pinning while grounded
+        if on_ground:
+            if dino_state == STATE_DUCK:
+                dino_y = float(GROUND_Y - (DUCK_H - DUCK_FEET_OFFSET))
+            else:
+                dino_y = float(GROUND_Y - (RUN_H - RUN_FEET_OFFSET))
+
+        # Jump physics
+        if not on_ground:
+            dino_vel_y += GRAVITY
+            dino_y += dino_vel_y
+            # land when FEET reach ground (use RUN feet offset in air)
+            if dino_y + (RUN_H - RUN_FEET_OFFSET) >= GROUND_Y:
+                dino_y = float(GROUND_Y - (RUN_H - RUN_FEET_OFFSET))
+                dino_vel_y = 0.0
+                on_ground = True
+                dino_state = STATE_DUCK if want_duck else STATE_RUN
+
+        # Player hitbox
+        img, sprite_rect, dino_hitbox = get_player_sprite_and_hitbox(DINO_X, dino_y, dino_state, on_ground)
+
+        # Move obstacles
+        for obs in obstacles:
+            obs["rect"].x -= int(speed)
+            if "hit" in obs:
+                obs["hit"].x -= int(speed)
+
+        # Remove offscreen
+        obstacles = [o for o in obstacles if o["rect"].right > -60]
+
+        # Spawn
+        dist_until_spawn -= int(speed)
+        if dist_until_spawn <= 0:
+            new_obs, next_gap = spawn_obstacle(speed)
+            obstacles.append(new_obs)
+            dist_until_spawn = next_gap
+
+        # Collision
+        for obs in obstacles:
+            if obs["kind"] in (OBS_BIRD_HIGH, OBS_BIRD_LOW):
+                if dino_hitbox.colliderect(obs["hit"]):
+                    game_over = True
+                    break
+            else:
+                if dino_hitbox.colliderect(obs["rect"]):
+                    game_over = True
+                    break
+
+        # Score + speed ramp
+        score += 1
+        if score % 400 == 0:
+            speed += 0.6
+
+    # -----------------------------
+    # Draw
+    # -----------------------------
+    screen.fill(WHITE)
+    draw_ground()
+
+    score_text = font.render(f"{score:06d}", True, BLACK)
+    screen.blit(score_text, (WIDTH - 120, 15))
+
+    for obs in obstacles:
+        if obs["kind"] == OBS_PAPER:
+            draw_paper(screen, obs["rect"])
+        elif obs["kind"] == OBS_BIRD_HIGH:
+            draw_high_bird(screen, obs["rect"])
+        else:
+            draw_low_bird(screen, obs["rect"])
+
+    img, sprite_rect, dino_hitbox = get_player_sprite_and_hitbox(DINO_X, dino_y, dino_state, on_ground)
+    screen.blit(img, sprite_rect)
+
+    if game_over:
+        show_text_center(["GAME OVER", "Press SPACE to restart"])
+
+    pygame.display.flip()d></encore>
