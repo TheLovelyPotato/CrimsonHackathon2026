@@ -7,11 +7,11 @@ python -m venv venv
 echo Activating virtual environment...
 call venv\Scripts\activate.bat
 
-echo Installing dependencies (if requirements.txt exists)...
-if exist requirements.txt (
-    pip install -r requirements.txt
+echo Installing dependencies (if Requirements.txt exists)...
+if exist Requirements.txt (
+    pip install -r Requirements.txt
 ) else (
-    echo No requirements.txt found. Skipping dependency installation.
+    echo No Requirements.txt found. Skipping dependency installation.
 )
 
 echo Virtual environment setup complete!
