@@ -8,6 +8,9 @@ import random
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+# Open camera, change index based on cam num and position
+capture = cv2.VideoCapture(1)
+
 #game init 
 WIDTH, HEIGHT = 900, 250
 FPS = 60
@@ -228,9 +231,6 @@ options = vision.FaceLandmarkerOptions(
 )
 
 landmarker = vision.FaceLandmarker.create_from_options(options) # Marker variable for face mapping
-
-# Open camera
-capture = cv2.VideoCapture(1)
 
 if not capture.isOpened(): # Safety check
     print("Could not open camera.")
